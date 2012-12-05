@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1/jquery.min.js"></script>
+<meta charset=utf-8 />
+<title>Page</title>
+<script type="text/javascript">
+  
+  //#### ElementDataObjectsLoader #####################
+  function ElementDataObjectsLoader( element ) {
+    this.element = element;
+  };
+  
+  ElementDataObjectsLoader.prototype.load = function() {
+    new DataObjectsLoader( this.element.data, this.element.dataObjects ).load();
+  };
+   
+  //#### DataObjectsLoader #####################
+  function DataObjectsLoader( dataReferences, dataObjects ) {
+    this.dataReferences = dataReferences;
+    this.dataObjects = dataObjects || {};
+  };
+  
+  DataObjectsLoader.prototype.load = function() {
+    this.loadObjects();
+  };
+      
+  DataObjectsLoader.prototype.loadObjects = function() {
+   var self = this;
+   for( objectName in this.dataReferences ) {
+      
+      var href = this.parseHref( this.dataReferences[ objectName ].href );
+      
+      loadJson( href, function( jsonObject ) {
+        self.dataObjects[ objectName ] = jsonObject;
+      });
+    }
+  };
+  
+  DataObjectsLoader.prototype.parseHref = function( href ) {
+    var parser = new CurlyBracketsParser();
+    
+    parser.putObjects( this.dataObjects, function( dataObject ) { 
+      return dataObject.fields || dataObject; 
+    } );
+    
+    return parser.parse( href );
+  };
+  
+  //#### CurlyBracketsParser ########################
+  function CurlyBracketsParser() {};
+  CurlyBracketsParser.firstPhaseRegex = /^#\{\s?([a-zA-z0-9\.]+)\s?\}#$/;
+  CurlyBracketsParser.secondPhaseRegex = /#\{\s?([a-zA-z0-9\.]+)\s?\}#/;
+  
+  CurlyBracketsParser.prototype.parse = function( str ) {
+    var result = this.firstPhase( str );
+    
+    if( result === null ) {
+      result = this.secondPhase( str );
+    }
+    
+    return result;
+  };
+  
+  CurlyBracketsParser.prototype.firstPhase = function( str ) {
+    var match = this.execFirstPhase( str );
+    
+    if( match ) {
+      return this.evaluateMatch( match[1] );
+    }
+    
+    return null;
+  };
+
+  CurlyBracketsParser.prototype.secondPhase = function( str ) {
+    
+    while( ( match = this.execSecondPhase( str ) ) !== null ) {
+      
+      var result = this.evaluateMatch( match[1] );
+      
+      str = str.replace( match[0], result || match[1] );
+    }
+    return str;
+  };
+  
+  CurlyBracketsParser.prototype.evaluateMatch = function( match ) {
+    return new Function( "return this." + match ).apply( this );
+  };
+  
+  CurlyBracketsParser.prototype.execSecondPhase = function( str ) {
+    return CurlyBracketsParser.secondPhaseRegex.exec( str );
+  };
+  
+  CurlyBracketsParser.prototype.execFirstPhase = function( str ) {
+    return CurlyBracketsParser.firstPhaseRegex.exec( str );
+  };
+  
+  CurlyBracketsParser.prototype.putObjects = function( objects, deepObjectKeySelection ) {
+    for( var objectName in objects ) {
+      this.putObject( objectName, objects[ objectName ], deepObjectKeySelection );
+    }
+  };
+  
+  CurlyBracketsParser.prototype.putObject = function( objectName, object, deepObjectKeySelection ) {
+    if( deepObjectKeySelection ) {
+      this[ objectName ] = deepObjectKeySelection( object );
+    }
+    else {
+      this[ objectName ] = object;
+    }
+  };
+  
+  //### DOMDataIterator ######################
+  function DOMDataIterator( element, tagElement ) {
+    this.element = element;
+    this.dataIterator = element.dataIterator;
+    this.tagElement = tagElement;
+  };
+  
+  DOMDataIterator.prototype.interateAndAppend = function() {
+    
+    var iterationHrefs = this.parseIteratorDataObjectHrefs();
+
+    var domElementAppendController = new DOMElementAppendController();
+   
+    for( iterationHref in iterationHrefs ) {
+      var data = this.createData( this.element.dataIterator.var , iterationHrefs[ iterationHref ] );
+      var ownDataObjects = $.extend( true, {}, this.element.dataObjects );
+      new DataObjectsLoader( data, ownDataObjects ).load();
+      
+      var domElementBuilder = new DOMElementBuilder( this.dataIterator.elementHref, this.tagElement, ownDataObjects );
+      domElementAppendController.addAppendFunction( domElementBuilder.appendIntoDOM.bind( domElementBuilder ) );
+      domElementBuilder.build( domElementAppendController.reportBuildFinished.bind( domElementAppendController ) );
+    }
+  };
+  
+  DOMDataIterator.prototype.parseIteratorDataObjectHrefs = function() {
+    var parser = new CurlyBracketsParser();
+    
+    parser.putObjects( this.element.dataObjects, function( dataObject ) { 
+      return dataObject.fields || dataObject; 
+    } );
+    
+    return parser.parse( this.element.dataIterator.data );
+  };
+  
+  DOMDataIterator.prototype.createData = function( objectName, objectHref ) {
+    var data = {};
+    
+    data[ objectName ] = { 
+      'href' : objectHref
+    };
+    
+    return data;
+  };
+
+  //### DOMElementAppendController ##################
+  function DOMElementAppendController() {
+    this.appendFunctions = [];
+    this.buildFinishedCounter = 0;
+  }
+
+  DOMElementAppendController.prototype.addAppendFunction = function( appendFunction ) {
+    this.appendFunctions.push( appendFunction );
+  }
+
+  DOMElementAppendController.prototype.reportBuildFinished = function() {
+    this.buildFinishedCounter++;
+    if( this.buildFinishedCounter == this.appendFunctions.length ) {
+      this.startAppendElements();
+    }
+  }
+
+  DOMElementAppendController.prototype.startAppendElements = function() {
+    for( index in this.appendFunctions ) {
+      this.appendFunctions[ index ]();
+    }
+  }
+
+  //### DOMElementBuilder ####################
+  function DOMElementBuilder( href, parent, dataObjects ) {
+    this.href = href
+    this.parent = parent;
+    
+    this.dataObjects = dataObjects || {};
+  };
+  
+  DOMElementBuilder.prototype.build = function( reportBuildFinished ) {
+    var self = this;
+ 
+    loadJson( this.href, function( jsonObject ) {
+// i think extend is not longer nessesarry
+      self.element = $.extend( true, {}, jsonObject );
+    
+      self.element.dataObjects = self.dataObjects;
+    
+      new ElementDataObjectsLoader( self.element ).load();
+
+      loadJson( self.element.type, function( jsonObject ) {
+
+        self.elementDef = $.extend( true, {}, jsonObject );
+    
+        self.parseElementFieldValuesToDataFieldValues();
+    
+        self.createElementAttributes();
+    
+        self.createTagElement();
+    
+        self.addValueIfElementHasOne();
+    
+        //self.appendIntoDOM();
+    
+        self.ifElementHasChildrenBuildThem();
+    
+        self.ifElementHasDataIteratorIterateOver();
+
+        reportBuildFinished();
+       });
+    });
+  };
+  
+  DOMElementBuilder.prototype.ifElementHasDataIteratorIterateOver = function() {
+    if( this.element.dataIterator ) {
+      new DOMDataIterator( this.element, this.tagElement ).interateAndAppend();
+    }
+  };
+  
+  DOMElementBuilder.prototype.ifElementHasChildrenBuildThem = function() {
+    if( this.element.children ) {
+      var domElementAppendController = new DOMElementAppendController();
+      for( var i in this.element.children ) {
+        var domElementBuilder = new DOMElementBuilder( this.element.children[i], this.tagElement, this.element.dataObjects );
+        domElementAppendController.addAppendFunction( domElementBuilder.appendIntoDOM.bind( domElementBuilder ) );      
+        domElementBuilder.build( domElementAppendController.reportBuildFinished.bind( domElementAppendController ) );
+      }
+    }
+  };
+
+  DOMElementBuilder.prototype.parseElementFieldValuesToDataFieldValues = function() {
+    var parser = new CurlyBracketsParser();
+    parser.putObjects( this.element.dataObjects, function( dataObject ) { 
+      return dataObject.fields || dataObject; 
+    } );
+    
+    // try map value
+    if( this.element.fieldDataMap.value ) {
+      this.element.fieldDataMap.value = parser.parse( this.element.fieldDataMap.value );
+    }
+    
+    // map attributes
+    var attributeMap = this.element.fieldDataMap.attributes;
+    
+    for( key in attributeMap ) {
+      attributeMap[key] = parser.parse(attributeMap[key]);
+    }
+    
+  };
+  
+  DOMElementBuilder.prototype.createTagElement = function() {
+    this.tagElement = $( this.elementDef.tag );
+  };
+  
+  DOMElementBuilder.prototype.createElementAttributes = function() {
+      
+    this.attributes = {};
+    
+    var attributeMap = this.element.fieldDataMap.attributes;
+    
+    for( key in attributeMap ) {
+      this.attributes[key] = attributeMap[key];
+    }
+  };
+  
+  DOMElementBuilder.prototype.addValueIfElementHasOne = function() {
+    if( this.element.fieldDataMap.value ) {
+      this.tagElement.prepend( this.element.fieldDataMap.value );
+    }
+  };
+  
+  DOMElementBuilder.prototype.appendIntoDOM = function() {
+    this.tagElement.attr( this.attributes ).appendTo( this.parent );
+  };
+    
+  //#### DOMPageBuilder ######################
+  function DOMPageBuilder( page ) {
+    this.page = page;
+  }
+  DOMPageBuilder.prototype.build = function() {
+    
+    new ElementDataObjectsLoader( this.page ).load();
+    
+    this.buildHead();
+    this.buildBody();
+  };
+  DOMPageBuilder.prototype.buildHead = function() {
+    var domElementAppendController = new DOMElementAppendController();
+    for( i in this.page.head.children ) {
+      var domElementBuilder = new DOMElementBuilder( this.page.head.children[i], $("head"), this.page.dataObjects );
+      domElementAppendController.addAppendFunction( domElementAppendController.reportBuildFinished.bind( domElementAppendController ) );
+      domElementBuilder.build( domElementBuilder.appendIntoDOM.bind( domElementBuilder ) );
+    }
+    
+  }; 
+  DOMPageBuilder.prototype.buildBody = function() {
+    var domElementAppendController = new DOMElementAppendController();
+    for( i in this.page.body.children ) {
+      var domElementBuilder = new DOMElementBuilder( this.page.body.children[i], $("body"), this.page.dataObjects );
+      domElementAppendController.addAppendFunction( domElementAppendController.reportBuildFinished.bind( domElementAppendController ) );
+      domElementBuilder.build( domElementBuilder.appendIntoDOM.bind( domElementBuilder ) );
+    }
+  };
+
+  function loadJson( uri, callback ) {
+    $.get( uri, function( data ) {
+      callback( data );
+    }, "json" );
+  }
+  
+  //#### Start Page Building ###########
+  $(window).load(function () {
+   
+    $.get( document.location.href, function( data ) {
+      new DOMPageBuilder( data ).build();
+    }, "json" ); 
+    
+  });
+    
+</script>
+</head>
+<body>
+</body>
+</html>
