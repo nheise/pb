@@ -1,3 +1,5 @@
+var http = require('http');
+
 var restHttp = require('RESThttp');
 
 var queryString = require('querystring');
@@ -305,6 +307,33 @@ restHttp.modules.put( {
             contextUtil.prepare200( context, JSON.stringify( dpis[ context.request.args.id ] ) );
             responseUtil.send200( context );
           }
+        }
+      }
+    },
+    {
+      uriPattern : '/tenant/{id}/view',
+      methods : {
+        GET : {
+          'application/json' : function( context ) {
+            http.get( 
+              { 
+                host : 'nheise.net',
+                port : 80,
+                path : '/pb/page/425342',
+                method : 'GET',
+                headers : { 'Accept' : 'application/json' }
+              },
+              function( response ) {
+                response.on( 'data', function( data ) {
+                  var pageObject = JSON.parse( data.toString() );
+                  pageObject.dataObjects["requestArgs"] = { "key" : context.request.args.id };
+                  contextUtil.prepare200( context, JSON.stringify( pageObject ) );
+                  responseUtil.send200( context );
+                });
+              }
+            );
+          },
+          'text/html' : fileResponses.createStreamFileResponse( function( context ) { return 'pb.html'; } )
         }
       }
     }

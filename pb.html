@@ -11,21 +11,22 @@
     this.element = element;
   };
   
-  ElementDataObjectsLoader.prototype.load = function() {
-    new DataObjectsLoader( this.element.data, this.element.dataObjects ).load();
+  ElementDataObjectsLoader.prototype.load = function( callback ) {
+    new DataObjectsLoader( this.element.data, this.element.dataObjects ).load( callback );
   };
    
   //#### DataObjectsLoader #####################
   function DataObjectsLoader( dataReferences, dataObjects ) {
-    this.dataReferences = dataReferences;
-    this.dataObjects = dataObjects || {};
+    this.dataReferences = dataReferences || {};
+    this.dataObjects = $.extend( true, {}, dataObjects );
+    this.loadedObjects = 0;
   };
   
-  DataObjectsLoader.prototype.load = function() {
-    this.loadObjects();
+  DataObjectsLoader.prototype.load = function( callback ) {
+    this.loadObjects( callback );
   };
       
-  DataObjectsLoader.prototype.loadObjects = function() {
+  DataObjectsLoader.prototype.loadObjects = function( callback ) {
    var self = this;
    for( objectName in this.dataReferences ) {
       
@@ -33,7 +34,14 @@
       
       loadJson( href, function( jsonObject ) {
         self.dataObjects[ objectName ] = jsonObject;
+        self.loadedObjects++;
+        if( self.allObjectsLoaded() ) {
+          callback( self.dataObjects );
+        }
       });
+    }
+    if( self.allObjectsLoaded() ) {
+      callback( self.dataObjects );
     }
   };
   
@@ -45,6 +53,10 @@
     } );
     
     return parser.parse( href );
+  };
+
+  DataObjectsLoader.prototype.allObjectsLoaded = function() {
+    return Object.getOwnPropertyNames( this.dataReferences ).length == this.loadedObjects;
   };
   
   //#### CurlyBracketsParser ########################
@@ -118,19 +130,21 @@
   };
   
   DOMDataIterator.prototype.interateAndAppend = function() {
-    
+    var self = this;
+
     var iterationHrefs = this.parseIteratorDataObjectHrefs();
 
-    var domElementAppendController = new DOMElementAppendController();
+    var syncActionAfterAsyncProcessingController = new SyncActionAfterAsyncProcessingController();
    
     for( iterationHref in iterationHrefs ) {
       var data = this.createData( this.element.dataIterator.var , iterationHrefs[ iterationHref ] );
-      var ownDataObjects = $.extend( true, {}, this.element.dataObjects );
-      new DataObjectsLoader( data, ownDataObjects ).load();
-      
-      var domElementBuilder = new DOMElementBuilder( this.dataIterator.elementHref, this.tagElement, ownDataObjects );
-      domElementAppendController.addAppendFunction( domElementBuilder.appendIntoDOM.bind( domElementBuilder ) );
-      domElementBuilder.build( domElementAppendController.reportBuildFinished.bind( domElementAppendController ) );
+
+//      var ownDataObjects = $.extend( true, {}, this.element.dataObjects );
+      new DataObjectsLoader( data, this.element.dataObjects ).load( function( dataObjects ) {
+
+        var domElementBuilder = new DOMElementBuilder( self.dataIterator.elementHref, self.tagElement, dataObjects );
+        domElementBuilder.build( syncActionAfterAsyncProcessingController.addAction( domElementBuilder.appendIntoDOM.bind( domElementBuilder ) ) );
+      });
     }
   };
   
@@ -154,26 +168,27 @@
     return data;
   };
 
-  //### DOMElementAppendController ##################
-  function DOMElementAppendController() {
-    this.appendFunctions = [];
-    this.buildFinishedCounter = 0;
+  //### SyncActionAfterAsyncProcessingController ##################
+  function SyncActionAfterAsyncProcessingController() {
+    this.actions = [];
+    this.actionFinishedCounter = 0;
   }
 
-  DOMElementAppendController.prototype.addAppendFunction = function( appendFunction ) {
-    this.appendFunctions.push( appendFunction );
+  SyncActionAfterAsyncProcessingController.prototype.addAction = function( action ) {
+    this.actions.push( action );
+    return this.actionFinished.bind( this );
   }
 
-  DOMElementAppendController.prototype.reportBuildFinished = function() {
-    this.buildFinishedCounter++;
-    if( this.buildFinishedCounter == this.appendFunctions.length ) {
-      this.startAppendElements();
+  SyncActionAfterAsyncProcessingController.prototype.actionFinished = function() {
+    this.actionFinishedCounter++;
+    if( this.actionFinishedCounter == this.actions.length ) {
+      this.callActions();
     }
   }
 
-  DOMElementAppendController.prototype.startAppendElements = function() {
-    for( index in this.appendFunctions ) {
-      this.appendFunctions[ index ]();
+  SyncActionAfterAsyncProcessingController.prototype.callActions = function() {
+    for( index in this.actions ) {
+      this.actions[ index ]();
     }
   }
 
@@ -194,28 +209,31 @@
     
       self.element.dataObjects = self.dataObjects;
     
-      new ElementDataObjectsLoader( self.element ).load();
+      new ElementDataObjectsLoader( self.element ).load( function( dataObjects ) {
 
-      loadJson( self.element.type, function( jsonObject ) {
+        self.element.dataObjects = dataObjects;
 
-        self.elementDef = $.extend( true, {}, jsonObject );
-    
-        self.parseElementFieldValuesToDataFieldValues();
-    
-        self.createElementAttributes();
-    
-        self.createTagElement();
-    
-        self.addValueIfElementHasOne();
-    
-        //self.appendIntoDOM();
-    
-        self.ifElementHasChildrenBuildThem();
-    
-        self.ifElementHasDataIteratorIterateOver();
+        loadJson( self.element.type, function( jsonObject ) {
 
-        reportBuildFinished();
-       });
+          self.elementDef = $.extend( true, {}, jsonObject );
+    
+          self.parseElementFieldValuesToDataFieldValues();
+    
+          self.createElementAttributes();
+    
+          self.createTagElement();
+    
+          self.addValueIfElementHasOne();
+    
+          //self.appendIntoDOM();
+    
+          self.ifElementHasChildrenBuildThem();
+    
+          self.ifElementHasDataIteratorIterateOver();
+
+          reportBuildFinished();
+        });
+      });
     });
   };
   
@@ -227,11 +245,10 @@
   
   DOMElementBuilder.prototype.ifElementHasChildrenBuildThem = function() {
     if( this.element.children ) {
-      var domElementAppendController = new DOMElementAppendController();
+      var syncActionAfterAsyncProcessingController = new SyncActionAfterAsyncProcessingController();
       for( var i in this.element.children ) {
         var domElementBuilder = new DOMElementBuilder( this.element.children[i], this.tagElement, this.element.dataObjects );
-        domElementAppendController.addAppendFunction( domElementBuilder.appendIntoDOM.bind( domElementBuilder ) );      
-        domElementBuilder.build( domElementAppendController.reportBuildFinished.bind( domElementAppendController ) );
+        domElementBuilder.build( syncActionAfterAsyncProcessingController.addAction( domElementBuilder.appendIntoDOM.bind( domElementBuilder ) ) );
       }
     }
   };
@@ -286,27 +303,28 @@
     this.page = page;
   }
   DOMPageBuilder.prototype.build = function() {
-    
-    new ElementDataObjectsLoader( this.page ).load();
-    
-    this.buildHead();
-    this.buildBody();
+    var self = this;
+    new ElementDataObjectsLoader( this.page ).load( function( dataObjects ) {
+      self.page.dataObjects = dataObjects;
+
+      self.buildHead();
+      self.buildBody();
+
+    });
   };
   DOMPageBuilder.prototype.buildHead = function() {
-    var domElementAppendController = new DOMElementAppendController();
+    var syncActionAfterAsyncProcessingController = new SyncActionAfterAsyncProcessingController();
     for( i in this.page.head.children ) {
       var domElementBuilder = new DOMElementBuilder( this.page.head.children[i], $("head"), this.page.dataObjects );
-      domElementAppendController.addAppendFunction( domElementAppendController.reportBuildFinished.bind( domElementAppendController ) );
-      domElementBuilder.build( domElementBuilder.appendIntoDOM.bind( domElementBuilder ) );
+      domElementBuilder.build( syncActionAfterAsyncProcessingController.addAction( domElementBuilder.appendIntoDOM.bind( domElementBuilder ) ) );
     }
     
   }; 
   DOMPageBuilder.prototype.buildBody = function() {
-    var domElementAppendController = new DOMElementAppendController();
+    var syncActionAfterAsyncProcessingController = new SyncActionAfterAsyncProcessingController();
     for( i in this.page.body.children ) {
       var domElementBuilder = new DOMElementBuilder( this.page.body.children[i], $("body"), this.page.dataObjects );
-      domElementAppendController.addAppendFunction( domElementAppendController.reportBuildFinished.bind( domElementAppendController ) );
-      domElementBuilder.build( domElementBuilder.appendIntoDOM.bind( domElementBuilder ) );
+      domElementBuilder.build( syncActionAfterAsyncProcessingController.addAction( domElementBuilder.appendIntoDOM.bind( domElementBuilder ) ) );
     }
   };
 
@@ -317,7 +335,7 @@
   }
   
   //#### Start Page Building ###########
-  $(window).load(function () {
+  $(window).load( function () {
    
     $.get( document.location.href, function( data ) {
       new DOMPageBuilder( data ).build();
