@@ -13,22 +13,40 @@ var fileResponses = restHttp.fileResponses;
 var foo = "hallo";
 
 var page = {
-    'href' : 'http://nheise.net/pb/page/425342',
-    'head' : {
-      'href' : 'http://nheise.net/pb/element/head/2383523',
-      'children' : [
-        'http://nheise.net/pb/element/style/435234'
-      ]
+    '425342' : {
+      'href' : 'http://nheise.net/pb/page/425342',
+      'head' : {
+        'href' : 'http://nheise.net/pb/element/head/2383523',
+        'children' : [
+          'http://nheise.net/pb/element/style/435234'
+        ]
+      },
+      'body' : {
+        'href' : 'http://nheise.net/pb/element/body/724352',
+        'children' : [
+          'http://nheise.net/pb/element/h1/73645',
+          'http://nheise.net/pb/element/div/264252'
+        ]
+      },
+      dataObjects : {}
     },
-    'body' : {
-      'href' : 'http://nheise.net/pb/element/body/724352',
-      'children' : [
-        'http://nheise.net/pb/element/h1/73645',
-        'http://nheise.net/pb/element/div/264252'
-      ]
-    },
-    dataObjects : {
-      'requestArgs' : { key : 'SYSTEM' }
+    '534263' : {
+      'href' : 'http://nheise.net/pb/page/534263',
+      'head' : {
+        'href' : 'http://nheise.net/pb/element/head/2383523',
+        'children' : [
+          'http://nheise.net/pb/element/style/435234',
+          'http://nheise.net/pb/element/script/436235'
+        ]
+      },
+      'body' : {
+        'href' : 'http://nheise.net/pb/element/body/724352',
+        'children' : [
+          'http://nheise.net/pb/element/textarea/43726',
+          'http://nheise.net/pb/element/button/7364537'
+        ]
+      },
+      dataObjects : {}
     }
   };
 
@@ -36,6 +54,14 @@ var elementDefs = {
     'style' : {
       'href' : 'http://nheise.net/pb/element/style',
       'tag' : '<style type="text/css"></style>',
+      'fields' : {
+        'attributes' : [ ],
+        'value' : ''
+      }
+    },
+    'script' : {
+      'href' : 'http://nheise.net/pb/element/script',
+      'tag' : '<script type="text/javascript"></script>',
       'fields' : {
         'attributes' : [ ],
         'value' : ''
@@ -54,6 +80,13 @@ var elementDefs = {
       'fields' : {
         'attributes' : [ 'class' ],
         'value' : ''
+      }
+    },
+    'button' : {
+      'href' : 'http://nheise.net/pb/element/button',
+      'tag' : '<input type="button"></input>',
+      'fields' : {
+        'attributes' : [ 'class', 'value', 'onclick' ]
       }
     },
     'div' : {
@@ -130,7 +163,7 @@ var elements = {
       ],
       'data' : { 
         'tenant' : {
-          'href' : 'http://nheise.net/tenant/#{requestArgs.key}#'
+          'href' : 'http://nheise.net/tenant/#{data.requestArgs.key}#'
         }
       }
     },
@@ -150,7 +183,7 @@ var elements = {
       'type' : 'http://nheise.net/pb/element/textarea',
       'fieldDataMap' : {
         'attributes' : {},
-        'value' : '#{tenant.description}#'
+        'value' : '#{data.tenant.description}#'
       }
     },
     '53426' : {
@@ -167,7 +200,7 @@ var elements = {
       'href' : 'http://nheise.net/pb/element/textfield/534263',
       'type' : 'http://nheise.net/pb/element/textfield',
       'fieldDataMap' : {
-        'attributes' : { 'value' : '#{tenant.key}#' }
+        'attributes' : { 'value' : '#{data.tenant.key}#' }
       }
     },
     '84756' : {
@@ -187,7 +220,7 @@ var elements = {
         'attributes' : {  }
       },
       'dataIterator' : {
-        'data' : '#{tenant.children}#',
+        'data' : '#{data.tenant.children}#',
         'var' : 'subTenant',
         'elementHref' : 'http://nheise.net/pb/element/li/53484'
       }
@@ -198,9 +231,40 @@ var elements = {
       'fieldDataMap' : {
         'attributes' : {
         },
-        'value' : '#{subTenant.key}#'
+        'value' : '#{data.subTenant.key}#'
       }
-    }
+    },
+    '43726' : {
+      'href' : 'http://nheise.net/pb/element/textarea/43726',
+      'type' : 'http://nheise.net/pb/element/textarea',
+      'fieldDataMap' : {
+        'attributes' : { 'id' : 'elementJson' },
+        'value' : '#{JSON.stringify(data.element)}#'
+      },
+      'data' : { 
+        'element' : {
+          'href' : 'http://nheise.net/pb/element/type/#{data.requestArgs.id}#'
+        }
+      }
+    },
+    '7364537' : {
+      'href' : 'http://nheise.net/pb/element/button/7364537',
+      'type' : 'http://nheise.net/pb/element/button',
+      'fieldDataMap' : {
+        'attributes' : {
+          'value' : 'Speichern',
+          'onclick' : 'put( "http://nheise.net/pb/element/type/#{data.requestArgs.id}#", $( "#elementJson" ).val() );'
+        }
+      }
+    },
+    '436235' : {
+      'href' : 'http://nheise.net/pb/element/script/436235',
+      'type' : 'http://nheise.net/pb/element/script',
+      'fieldDataMap' : {
+        'attributes' : {},
+        'value' : 'function put( uri, data ) { $.ajax( { url : uri, \'data\' : data, dataType : \'json\', type : \'PUT\', complete : function( jqXHR, textStatus ) { alert( textStatus );  } } ); }'
+      }
+    },
   };
 
 var dpis = {
@@ -260,7 +324,7 @@ restHttp.modules.put( {
         GET : {
           'text/html' : fileResponses.createStreamFileResponse( function( context ) { return 'pb.html'; } ),
           'application/json' : function( context ) {
-            contextUtil.prepare200( context, JSON.stringify( page ) );
+            contextUtil.prepare200( context, JSON.stringify( page[ context.request.args.id ] ) );
             responseUtil.send200( context );
           }
         }
@@ -285,6 +349,41 @@ restHttp.modules.put( {
             contextUtil.prepare200( context, JSON.stringify( elements[ context.request.args.id ] ) );
             responseUtil.send200( context );
           }
+        },
+        PUT : {
+          'application/json' : function( context ) {
+            context.requestListener.on( 'data', function( data ) {
+              elements[ context.request.args.id ] = JSON.parse( data.toString() );
+              responseUtil.send200( context );
+            });
+          }
+        }
+      }
+    },
+    {
+      uriPattern : '/pb/element/{type}/{id}/edit',
+      methods : {
+        GET : {
+          'application/json' : function( context ) {
+            http.get(
+              {
+                host : 'nheise.net',
+                port : 80,
+                path : '/pb/page/534263',
+                method : 'GET',
+                headers : { 'Accept' : 'application/json' }
+              },
+              function( response ) {
+                response.on( 'data', function( data ) {
+                  var pageObject = JSON.parse( data.toString() );
+                  pageObject.dataObjects["requestArgs"] = { "id" : context.request.args.id };
+                  contextUtil.prepare200( context, JSON.stringify( pageObject ) );
+                  responseUtil.send200( context );
+                });
+              }
+            );
+          },
+          'text/html' : fileResponses.createStreamFileResponse( function( context ) { return 'pb.html'; } )
         }
       }
     },

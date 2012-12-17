@@ -60,9 +60,11 @@
   };
   
   //#### CurlyBracketsParser ########################
-  function CurlyBracketsParser() {};
-  CurlyBracketsParser.firstPhaseRegex = /^#\{\s?([a-zA-z0-9\.]+)\s?\}#$/;
-  CurlyBracketsParser.secondPhaseRegex = /#\{\s?([a-zA-z0-9\.]+)\s?\}#/;
+  function CurlyBracketsParser() {
+    this.data = {};
+  };
+  CurlyBracketsParser.firstPhaseRegex = /^#\{\s?([a-zA-z0-9\.\(\)]+)\s?\}#$/;
+  CurlyBracketsParser.secondPhaseRegex = /#\{\s?([a-zA-z0-9\.\(\)]+)\s?\}#/;
   
   CurlyBracketsParser.prototype.parse = function( str ) {
     var result = this.firstPhase( str );
@@ -96,7 +98,7 @@
   };
   
   CurlyBracketsParser.prototype.evaluateMatch = function( match ) {
-    return new Function( "return this." + match ).apply( this );
+    return new Function( "data", "return " + match ).call( null, this.data );
   };
   
   CurlyBracketsParser.prototype.execSecondPhase = function( str ) {
@@ -115,10 +117,10 @@
   
   CurlyBracketsParser.prototype.putObject = function( objectName, object, deepObjectKeySelection ) {
     if( deepObjectKeySelection ) {
-      this[ objectName ] = deepObjectKeySelection( object );
+      this.data[ objectName ] = deepObjectKeySelection( object );
     }
     else {
-      this[ objectName ] = object;
+      this.data[ objectName ] = object;
     }
   };
   
